@@ -1,0 +1,73 @@
+import sys
+import gym
+import matplotlib
+import numpy as np
+from collections import defaultdict, deque
+import matplotlib.pyplot as plt
+import random
+import check_test
+from plot_utils import plot_values
+
+env = gym.make('CliffWalking-v0')
+
+
+#def gets_prob(Q_S, epsilon, nA):
+#    policy_s = np.ones(nA) * epsilon / nA
+#   best_a = np.argmax(Q_S)
+#   policy_s[best_a] = 1 - epsilon + (epsilon / nA)
+#  return policy_s
+
+def update_Q_sarsa(alpha, gamma, Q, state, action, reward, next_state=None, next_action=None):
+    """Returns updated Q-value for the most recent experience."""
+    current = Q[state][action]  # estimate in Q-table (for current state, action pair)
+    # get value of state, action pair at next time step
+    Qsa_next = Q[next_state][next_action] if next_state is not None else 0
+    target = reward + (gamma * Qsa_next)               # construct TD target
+    new_value = current + (alpha * (target - current)) # get updated value
+    return new_value
+def epsilon_greedy(Q, state, nA, eps):
+
+    if random.random() > eps:  # select greedy action with probability epsilon
+        return np.argmax(Q[state])
+    else:  # otherwise, select an action randomly
+        return random.choice(np.arange(env.action_space.n))
+
+
+def sarsa(env, num_episodes, alpha, gamma=1.0):
+    # initialize action-value function (empty dictionary of arrays)
+    Q = defaultdict(lambda: np.zeros(env.nA))
+    # initialize performance monitor
+
+    # loop over episodes
+    for i_episode in range(1, num_episodes + 1):
+        # monitor progress
+        if i_episode % 100 == 0:
+            print("\rEpisode {}/{}".format(i_episode, num_episodes), end="")
+            sys.stdout.flush()
+        epsilon = 1.0 / i_episode
+        state = env.reset()
+        action = epsilon_greedy(Q, state, env.nA, epsilon)
+
+        while True:
+            next_state, reward, done, info = env.step(action)
+            next_action = epsilon_greedy(Q, next_state, env.nA, epsilon)
+            #Q[state][action] = Q[state][action] + alpha * (
+                        #reward + gamma * (Q[next_state][next_action]) - Q[state][action])
+            Q[state][action]= update_Q_sarsa(alpha,gamma,Q,state,action,reward,next_state,next_action)
+            state = next_state
+            action = next_action
+            if (done):
+                Q[state][action] = update_Q_sarsa(alpha, gamma, Q, state, action, reward)
+                break
+    return Q
+
+
+Q_sarsa = sarsa(env, 5000, .01)
+# print the estimated optimal policy
+policy_sarsa = np.array([np.argmax(Q_sarsa[key]) if key in Q_sarsa else -1 for key in np.arange(48)]).reshape(4, 12)
+check_test.run_check('td_control_check', policy_sarsa)
+print("\nEstimated Optimal Policy (UP = 0, RIGHT = 1, DOWN = 2, LEFT = 3, N/A = -1):")
+print(policy_sarsa)
+# plot the estimated optimal state-value function
+V_sarsa = ([np.max(Q_sarsa[key]) if key in Q_sarsa else 0 for key in np.arange(48)])
+plot_values(V_sarsa)
